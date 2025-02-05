@@ -45,28 +45,47 @@ export class CardShapeUtil extends ShapeUtil<ICardShape> {
 
   component(shape: ICardShape) {
     const bounds = this.editor.getShapeGeometry(shape).bounds;
-    const theme = getDefaultColorTheme({ isDarkMode: this.editor.user.getIsDarkMode() });
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [count, setCount] = useState(0);
+    const letterPaperRatio = 8.5 / 11;
+    const boxesNeeded = Math.ceil(bounds.height / (bounds.width / letterPaperRatio));
 
     return (
       <HTMLContainer
         id={shape.id}
         style={{
-          border: "1px solid black",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          pointerEvents: "all",
-          backgroundColor: theme[shape.props.color].semi,
-          color: theme[shape.props.color].solid,
+          outline: "2px solid black",
+          position: "relative",
         }}>
-        <h2>Clicks: {count}</h2>
-        <button onClick={() => setCount((count) => count + 1)} onPointerDown={(e) => e.stopPropagation()}>
-          {bounds.w.toFixed()}x{bounds.h.toFixed()}
-        </button>
+        <div
+          style={{
+            position: "absolute",
+            top: "-1.2rem",
+            left: "-2px",
+            width: "100%",
+          }}>
+          <div
+            style={{
+              background: "black",
+              color: "white",
+              padding: "0.1rem",
+              fontSize: "0.5rem",
+              borderRadius: "0.5rem 0.5rem 0.5rem 0",
+              width: "fit-content",
+              whiteSpace: "nowrap",
+            }}>
+            {shape.id}
+          </div>
+        </div>
+        {Array.from({ length: boxesNeeded }, (_, i) => (
+          <div
+            key={i}
+            style={{
+              width: "100%",
+              aspectRatio: `${letterPaperRatio}`,
+              outline: "2px dashed black",
+            }}></div>
+        ))}
       </HTMLContainer>
     );
   }

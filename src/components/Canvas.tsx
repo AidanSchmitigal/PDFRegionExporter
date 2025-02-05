@@ -100,7 +100,7 @@ const customComponents: TLComponents = {
   Toolbar: CustomToolbar,
   // SharePanel: ExportButton,
   // InFrontOfTheCanvas: () => <PageOverlayScreen pdf={pdf} />,
-  SharePanel: () => <ExportPdfButton pdf={undefined} />,
+  SharePanel: () => <ExportPdfButton />,
 };
 
 const customAssetUrls: TLUiAssetUrlOverrides = {
@@ -115,6 +115,8 @@ export function Canvas() {
   // const overlay = useMemo(() => <PageOverlayScreen pdfs={pdfs} />, [pdfs]);
 
   const [editor, setEditor] = useState<Editor | null>(null);
+
+  // let makeSureShapesAreAtBottom = () => {};
 
   if (editor != null) {
     console.log("re running editor fucntions");
@@ -170,33 +172,29 @@ export function Canvas() {
     const shapeIdSet = new Set(allShapeIds);
 
     // Make sure the shapes are below any of the other shapes
-    const makeSureShapesAreAtBottom = () => {
-      const shapes = allShapeIds.map((id) => editor.getShape(id)!).sort(sortByIndex);
-      const pageId = editor.getCurrentPageId();
+    // makeSureShapesAreAtBottom = () => {
+    //   const shapes = allShapeIds.map((id) => editor.getShape(id)!).sort(sortByIndex);
+    //   const pageId = editor.getCurrentPageId();
 
-      const siblings = editor.getSortedChildIdsForParent(pageId);
-      const currentBottomShapes = siblings.slice(0, shapes.length).map((id) => editor.getShape(id)!);
+    //   const siblings = editor.getSortedChildIdsForParent(pageId);
+    //   const currentBottomShapes = siblings.slice(0, shapes.length).map((id) => editor.getShape(id)!);
 
-      if (currentBottomShapes.every((shape, i) => shape.id === shapes[i].id)) return;
+    //   if (currentBottomShapes.every((shape, i) => shape.id === shapes[i].id)) return;
 
-      const otherSiblings = siblings.filter((id) => !shapeIdSet.has(id));
-      const bottomSibling = otherSiblings[0];
-      const lowestIndex = editor.getShape(bottomSibling)!.index;
+    //   const otherSiblings = siblings.filter((id) => !shapeIdSet.has(id));
+    //   const bottomSibling = otherSiblings[0];
+    //   const lowestIndex = editor.getShape(bottomSibling)!.index;
 
-      const indexes = getIndicesBetween(undefined, lowestIndex, shapes.length);
-      editor.updateShapes(
-        shapes.map((shape, i) => ({
-          id: shape.id,
-          type: shape.type,
-          isLocked: shape.isLocked,
-          index: indexes[i],
-        }))
-      );
-    };
-
-    // makeSureShapesAreAtBottom();
-    editor.sideEffects.registerAfterCreateHandler("shape", makeSureShapesAreAtBottom);
-    editor.sideEffects.registerAfterChangeHandler("shape", makeSureShapesAreAtBottom);
+    //   const indexes = getIndicesBetween(undefined, lowestIndex, shapes.length);
+    //   editor.updateShapes(
+    //     shapes.map((shape, i) => ({
+    //       id: shape.id,
+    //       type: shape.type,
+    //       isLocked: shape.isLocked,
+    //       index: indexes[i],
+    //     }))
+    //   );
+    // };
 
     // Don't let the user unlock the pages
     editor.sideEffects.registerBeforeChangeHandler("shape", (prev, next) => {
@@ -225,19 +223,20 @@ export function Canvas() {
     editor.setCamera(editor.getCamera(), { reset: true });
   }
 
-  return (
-    <div>
-      <PdfPicker onOpenPdf={(pdf) => setPdfs([...pdfs, pdf])} />
-      <div>{pdfs.map((pdf) => pdf.name)}</div>
-      {pdfs.length && (
+  switch (pdfs.length) {
+    case 0:
+      return (
         <div className="PdfEditor">
-          {/* <PdfEditor pdfs={state} moreprops={{
-            tools: customTools,
-            overrides: customUiOverrides,
-            components: customComponents,
-            shapeUtils: customShapeUtils,
-            assetUrls: customAssetUrls
-          }} /> */}
+          <PdfPicker
+            onOpenPdf={(pdf) => {
+              setPdfs([...pdfs, pdf]);
+            }}
+          />
+        </div>
+      );
+    default:
+      return (
+        <div className="PdfEditor">
           <Tldraw
             tools={customTools}
             overrides={customUiOverrides}
@@ -247,22 +246,15 @@ export function Canvas() {
             onMount={(editor) => {
               setEditor(editor);
             }}>
-            <PdfPicker onOpenPdf={(pdf) => console.log(pdf)} />
+            <PdfPicker
+              onOpenPdf={(pdf) => {
+                setPdfs([...pdfs, pdf]);
+              }}
+            />
           </Tldraw>
         </div>
-      )}
-      {/* <div className="h-[75vh] w-screen">
-        <Tldraw
-          // persistenceKey="tldraw_canvas3"
-          tools={customTools}
-          overrides={customUiOverrides}
-          components={customComponents}
-          shapeUtils={customShapeUtils}
-          assetUrls={customAssetUrls}
-        />
-      </div> */}
-    </div>
-  );
+      );
+  }
 }
 
 // function ExportButton() {

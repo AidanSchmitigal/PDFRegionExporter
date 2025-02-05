@@ -1,18 +1,11 @@
-import { PDFDocument } from "pdf-lib";
+// ExportButton.tsx
+import { PDFDocument, PageSizes } from "pdf-lib";
 import { useState } from "react";
-import { Editor, exportToBlob, useEditor } from "tldraw";
-import { Pdf } from "./PdfPicker";
+import { Box, Editor, exportToBlob, useEditor } from "tldraw";
 
-export function ExportPdfButton({ pdf }: { pdf: Pdf | undefined }) {
+export function ExportPdfButton() {
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const editor = useEditor();
-
-  if (!pdf)
-    return (
-      <button className="ExportPdfButton" onClick={async () => {}}>
-        {exportProgress ? `Exporting... ${Math.round(exportProgress * 100)}%` : "Export PDF"}
-      </button>
-    );
 
   return (
     <button
@@ -20,7 +13,7 @@ export function ExportPdfButton({ pdf }: { pdf: Pdf | undefined }) {
       onClick={async () => {
         setExportProgress(0);
         try {
-          await exportPdf(editor, pdf, setExportProgress);
+          await exportPdfFromRegions(editor, setExportProgress);
         } finally {
           setExportProgress(null);
         }
@@ -30,64 +23,117 @@ export function ExportPdfButton({ pdf }: { pdf: Pdf | undefined }) {
   );
 }
 
-async function exportPdf(editor: Editor, { name, source, pages }: Pdf, onProgress: (progress: number) => void) {
-  const totalThings = pages.length * 2 + 2;
-  let progressCount = 0;
+async function exportPdfFromRegions(editor: Editor, onProgress: (progress: number) => void) {
+  // Find all PDF region shapes
+  const pdfRegions = Array.from(editor.getCurrentPageShapeIds())
+    .map((id) => ({
+      id,
+      shape: editor.getShape(id),
+    }))
+    .filter(({ shape }) => shape?.type === "card")
+    .sort((a, b) => {
+      // Sort by vertical position for page order
+      const boundsA = editor.getShapePageBounds(a.id);
+      const boundsB = editor.getShapePageBounds(b.id);
+      return (boundsA?.y ?? 0) - (boundsB?.y ?? 0);
+    });
+
+  if (pdfRegions.length === 0) {
+    alert("No PDF regions found");
+    return;
+  }
+
+  let totalSteps = pdfRegions.length * 2 + 2;
+  let progress = 0;
   const tickProgress = () => {
-    progressCount++;
-    onProgress(progressCount / totalThings);
+    progress++;
+    onProgress(progress / totalSteps);
   };
 
-  const pdf = await PDFDocument.load(source);
+  /**
+   * ===============================================
+   */
+
+  // Create a new PDF document
+  const pdfDoc = await PDFDocument.create();
   tickProgress();
 
-  const pdfPages = pdf.getPages();
-  if (pdfPages.length !== pages.length) {
-    throw new Error("PDF page count mismatch");
-  }
+  const allIds = Array.from(editor.getCurrentPageShapeIds()).filter((id) => editor.getShape(id)?.type !== "card");
 
-  const pageShapeIds = new Set(pages.map((page) => page.shapeId));
-  const allIds = Array.from(editor.getCurrentPageShapeIds()).filter((id) => !pageShapeIds.has(id));
+  const letterPaperRatio = 8.5 / 11;
 
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i];
-    const pdfPage = pdfPages[i];
+  // Process each region
+  for (const region of pdfRegions) {
+    const bounds = editor.getShapePageBounds(region.id);
+    if (!bounds) continue;
 
-    const bounds = page.bounds;
-    const shapesInBounds = allIds.filter((id) => {
-      const shapePageBounds = editor.getShapePageBounds(id);
-      if (!shapePageBounds) return false;
-      return shapePageBounds.collides(bounds);
-    });
+    console.log("region", region);
+    console.log("bounds", bounds);
 
-    if (shapesInBounds.length === 0) {
+    const regionWidth = bounds.w;
+    const regionHeight = bounds.h;
+    const regionPageHeight = regionWidth / letterPaperRatio;
+    const pagesNeeded = Math.ceil(regionHeight / regionPageHeight);
+
+    console.log("regionWidth", regionWidth);
+    console.log("regionHeight", regionHeight);
+    console.log("regionPageHeight", regionPageHeight);
+    console.log("pagesNeeded", pagesNeeded);
+
+    totalSteps += pagesNeeded - 1;
+
+    for (let i = 0; i < pagesNeeded; i++) {
+      const newBounds = new Box(bounds.x, bounds.y + regionPageHeight * i, regionWidth, Math.min(regionHeight - regionPageHeight * i, regionPageHeight));
+      console.log("i", i);
+      console.log("regionheight", regionHeight);
+      console.log("region h", regionPageHeight * i);
+      console.log("region -", regionHeight - regionPageHeight * i);
+      console.log("rejjjj", regionPageHeight);
+      console.log("rejjjj", (regionHeight - regionPageHeight * i) % regionPageHeight);
+      console.log("newBounds", newBounds);
+
+      // Screenshot the region
+      const exportedPng = await exportToBlob({
+        editor,
+        ids: allIds,
+        format: "png",
+        opts: {
+          background: true,
+          bounds: newBounds,
+          padding: 0,
+          scale: 2, // Higher resolution
+        },
+      });
       tickProgress();
+
+      // Add a new page and embed the screenshot
+      const page = pdfDoc.addPage(PageSizes.Letter);
+      const pngImage = await pdfDoc.embedPng(await exportedPng.arrayBuffer());
+
+      // Calculate dimensions to fit the page while maintaining aspect ratio
+      const { width: imageWidth, height: imageHeight } = pngImage;
+      const pageWidth = page.getWidth();
+      const pageHeight = page.getHeight();
+      const scale = Math.min(pageWidth / imageWidth, pageHeight / imageHeight);
+
+      page.drawImage(pngImage, {
+        x: 0,
+        y: pageHeight - imageHeight * scale,
+        width: imageWidth * scale,
+        height: imageHeight * scale,
+      });
       tickProgress();
-      continue;
     }
-
-    const exportedPng = await exportToBlob({
-      editor,
-      ids: allIds,
-      format: "png",
-      opts: { background: false, bounds: page.bounds, padding: 0, scale: 1 },
-    });
-    tickProgress();
-
-    pdfPage.drawImage(await pdf.embedPng(await exportedPng.arrayBuffer()), {
-      x: 0,
-      y: 0,
-      width: pdfPage.getWidth(),
-      height: pdfPage.getHeight(),
-    });
-    tickProgress();
   }
 
-  const url = URL.createObjectURL(new Blob([await pdf.save()], { type: "application/pdf" }));
+  // Save and download the PDF
+  const pdfBytes = await pdfDoc.save();
+  const url = URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
   tickProgress();
+
   const a = document.createElement("a");
   a.href = url;
-  a.download = name;
+  a.download = "exported-regions.pdf";
   a.click();
   URL.revokeObjectURL(url);
 }

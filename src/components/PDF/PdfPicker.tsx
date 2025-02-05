@@ -94,18 +94,6 @@ export function PdfPicker({ onOpenPdf }: { onOpenPdf(pdf: Pdf): void }) {
     input.click();
   }
 
-  async function onClickUseExample() {
-    setIsLoading(true);
-    try {
-      const result = await fetch(tldrawPdf);
-      const pdf = await loadPdf("tldraw.pdf", await result.arrayBuffer());
-      console.log("onOpenPdf", pdf);
-      onOpenPdf(pdf);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   if (isLoading) {
     return <div className="PdfPicker">Loading...</div>;
   }
@@ -113,8 +101,6 @@ export function PdfPicker({ onOpenPdf }: { onOpenPdf(pdf: Pdf): void }) {
   return (
     <div className="PdfPicker">
       <button onClick={onClickOpenPdf}>Open PDF</button>
-      <div>or</div>
-      <button onClick={onClickUseExample}>Use an example</button>
     </div>
   );
 }
